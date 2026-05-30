@@ -1,100 +1,175 @@
+# Catalyst Center GenAI Troubleshooting
 
-# Catalyst Center Troubleshooting IssuesPilot
+Written by Gabi Zapodeanu, Principal TME, updated with Cursor/Codex 5.3.
 
+`Issues Pilot` is a local troubleshooting assistant that:
+- collects Catalyst Center issue/device/compliance/command output data into `DATASET/`
+- chunks and embeds that data into a Chroma collection
+- answers troubleshooting questions from the Chroma context using OpenAI or Anthropic client apps
 
-The repo includes the files to:
+## Project Structure
 
-- Create and run a Chrom DB vector database server.
-It will create the folder to store the data and start the server.
-A second app will allow to erase the vector database and/or create a new vector database.
+- `Data_Collection/network_troubleshooting.py`: pull troubleshooting data for one assurance issue ID
+- `Transform_Data/embeddings_to_chroma.py`: ingest `DATASET/` files into Chroma with metadata
+- `DB_Server/chroma_db_server.py`: start local Chroma server
+- `DB_Server/chroma_create_erase_collection.py`: create/delete target Chroma collection
+- `ClientApp/query_issues_pilot_openai.py`: single-turn query client (OpenAI)
+- `ClientApp/conversation_issues_pilot_openai.py`: multi-turn conversation client (OpenAI)
+- `ClientApp/conversation_issues_pilot_anthropic.py`: multi-turn conversation client (Anthropic)
+- `Transform_Data/embeddings_toolkit.py`: embedding model + TLS sanity helper
 
-- Create Embeddings 
-Create embeddings and save them to local or server vector database.
+## Setup
 
-- Client App:
-Query and answer: Similarity searches using gtp-5.2
-Conversational: gtp-5.2 and Anthropic Sonnet 4
+1. Create and activate a virtual environment:
 
-Sample Output:
-
-Your input: Can you check the active issues, devices impacted and provide a summary of your findings
-
-IssuesPilot: 
-## Active Issues Summary
-
-### **Critical BGP Failures - P1 Priority**
-
-**Issue 1: PDX-RO BGP Down**
-- **Device**: PDX-RO (CSR1000V, SN: 9XIF5ZTLXRB)
-- **Problem**: BGP session down with neighbor 10.93.141.42
-- **Status**: Idle state (completely down)
-- **Timestamp**: Fri Jun 6 11:41:51 2025
-- **Duration**: Ongoing for ~19 minutes
-
-**Issue 2: PDX-RN BGP Down** 
-- **Device**: PDX-RN (CSR1000V, SN: 92ML86IWCBN)
-- **Problem**: BGP session down with neighbor 10.93.141.41  
-- **Status**: Active state (attempting connection but failing)
-- **Timestamp**: Fri Jun 6 11:41:51 2025
-- **Duration**: Ongoing for ~13 minutes
-
-## Devices Impacted
-
-### **Primary Impact:**
-- **PDX-RO** - Edge router in AS 65002 at Global/OR/PDX/Floor-2
-- **PDX-RN** - Edge router in AS 65001 at Global/OR/PDX/Floor-2
-
-### **Secondary Impact:**
-- **Inter-AS connectivity** between AS 65001 and AS 65002 compromised
-- **Site-wide routing** potentially affected (both devices at same location)
-- **Upstream/downstream traffic flows** likely impacted
-
-## Key Findings Summary
-
-### **Root Cause Analysis:**
-
-1. **Definitive Cause - Access Control List Issue:**
-   - **PDX-RN has WAN ACL explicitly blocking ALL BGP traffic**
-   - ACL rules `10 deny tcp any eq bgp any` (93 matches) and `15 deny tcp any any eq bgp` (104 matches)
-   - **This is actively blocking BGP sessions and causing the failures**
-
-2. **Timing Correlation:**
-   - Both BGP sessions failed simultaneously at 11:41:51
-   - Recent configuration changes detected on both devices around the same timeframe
-   - PDX-RO config change at 11:41:10 (41 seconds before BGP failure)
-
-3. **Network Architecture Concerns:**
-   - Both critical edge routers at same physical site
-   - Single points of failure for inter-AS connectivity
-   - No apparent BGP session redundancy
-
-### **Compliance Status:**
-- **PDX-RO**: All compliance checks PASSED (IMAGE, PSIRT, RUNNING_CONFIG)
-- **PDX-RN**: Generally compliant with network standards
-
-### **Security Observations:**
-- **Unauthorized configuration changes** possible (user account made recent changes)
-- **No apparent change control** mechanisms in place
-- **ACL misconfigurations** causing business-critical service outages
-
-## Immediate Action Required
-
-**URGENT - Fix BGP blocking:**
-```cisco
-! On PDX-RN device
-configure terminal
-ip access-list extended WAN
-no 10
-no 15
-exit
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-## Business Impact
-- **HIGH** - P1 priority indicates critical business services affected
-- **Inter-site connectivity** between autonomous systems is down
-- **Potential revenue impact** if these are customer-facing services
-- **SLA breach risk** for uptime commitments
+2. Install dependencies:
 
-**Recommendation**: Implement immediate fix for ACL blocking, followed by comprehensive network resilience and change control improvements.
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-Your input: 
+3. Configure environment values in `environment.env` (used directly by scripts via `load_dotenv`).
+
+Minimum required values depend on script, but commonly include:
+- Chroma: `DB_SERVER`, `DB_PORT`, `DB_COLLECTION`, `DB_PATH`
+- Data paths: `APPS_PATH`, `DATASET`
+- Embeddings: `MODEL_NAME` or `MODEL_LOCAL_PATH`
+- OpenAI clients: `OPENAI_API_KEY`, `OPENAI_MODEL`
+- Anthropic client: `CLAUDE_API_KEY`, `CLAUDE_MODEL`
+- Data collection: `CC_URL`, `CC_USER`, `CC_PASS`
+
+## Data Collection -> Embedding -> Chroma Flow
+
+Run these in order from repo root:
+
+1) Start Chroma server:
+
+```bash
+python DB_Server/chroma_db_server.py
+```
+
+2) Create (or reset) collection:
+
+```bash
+python DB_Server/chroma_create_erase_collection.py
+```
+
+3) Collect troubleshooting data for one assurance issue:
+
+```bash
+python Data_Collection/network_troubleshooting.py <assuranceIssueId>
+```
+
+4) Embed and load `DATASET/` into Chroma:
+
+```bash
+python Transform_Data/embeddings_to_chroma.py
+```
+
+## Client Apps and Model Choices
+
+- OpenAI single-turn: `python ClientApp/query_issues_pilot_openai.py`
+- OpenAI conversation: `python ClientApp/conversation_issues_pilot_openai.py`
+- Anthropic conversation: `python ClientApp/conversation_issues_pilot_anthropic.py`
+
+Model selection is environment-driven:
+- embeddings model: `MODEL_LOCAL_PATH` (preferred if set) else `MODEL_NAME`
+- OpenAI model: `OPENAI_MODEL`
+- Anthropic model: `CLAUDE_MODEL`
+
+Legacy scripts still exist in `Query/` for earlier direct query patterns.
+
+## Retrieval Behavior (Current)
+
+All `ClientApp/*issues_pilot*.py` clients now use this retrieval pipeline:
+
+1. Device-only metadata filter:
+   - Detect device from query (exact match first).
+   - Apply Chroma filter `{"device name": "<device>"}` when detected.
+
+2. Typo-tolerant hostname normalization:
+   - Normalize hostnames (case/`-`/`_` tolerant).
+   - Use fuzzy token match (`difflib.get_close_matches`, cutoff `0.74`) for misspelled device names.
+   - Rewrite only the typed token in the effective query.
+
+3. Hybrid retrieval:
+   - Vector retriever query with `k=20` (plus metadata filter when available).
+   - Parallel filter-only fetch via `chroma_db.get(where=metadata_filter, include=["documents", "metadatas"])`.
+
+4. Candidate merge and dedupe:
+   - Merge vector and filter candidates.
+   - Deduplicate by `(page_content, metadata)` key.
+
+5. Lexical rerank + context cap:
+   - Score by lexical overlap between query tokens and:
+     - chunk content tokens
+     - metadata tokens (`CLI command`, `issue name`, `filename`) with half-weight
+   - Keep top 16 chunks as final LLM context.
+
+## Timing Instrumentation
+
+Each query prints a latency line in this format:
+
+```text
+IssuesPilot: timing retrieval=<ms>ms filter=<ms>ms rerank=<ms>ms llm=<ms>ms total=<ms>ms
+```
+
+How to interpret:
+- `retrieval`: vector retrieval time (`as_retriever().invoke`)
+- `filter`: metadata-only Chroma fetch (`get(where=...)`)
+- `rerank`: merge + dedupe + lexical scoring
+- `llm`: answer generation time
+- `total`: full end-to-end user-query latency
+
+`llm` may be `0ms` when no matching context is found.
+
+## SSL / Certifi / HF_CA_BUNDLE Troubleshooting
+
+For TLS/proxy certificate issues while loading Hugging Face models:
+
+1. Put your corporate CA bundle in a PEM file.
+2. Set `HF_CA_BUNDLE` in `environment.env` to that PEM path.
+3. If unset, scripts fall back to:
+   - `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE` (if already set), then
+   - `~/hf-ca-bundle.pem` (if present), then
+   - `certifi.where()`
+
+Quick check:
+
+```bash
+python Transform_Data/embeddings_toolkit.py
+```
+
+If model download still fails, use a local embedding path via `MODEL_LOCAL_PATH`.
+
+## Quick Smoke Tests
+
+From repo root, with `.venv` active and `environment.env` configured:
+
+```bash
+# 1) Verify embedding model + TLS chain
+python Transform_Data/embeddings_toolkit.py
+
+# 2) Start Chroma server (terminal 1)
+python DB_Server/chroma_db_server.py
+
+# 3) Ensure collection exists (terminal 2)
+python DB_Server/chroma_create_erase_collection.py
+
+# 4) Ingest dataset
+python Transform_Data/embeddings_to_chroma.py
+
+# 5) Ask one question
+python ClientApp/query_issues_pilot_openai.py
+```
+
+Expected signs of success:
+- client prints target server/collection/models
+- optional device notice/filter message when hostname is detected
+- final timing line with retrieval/filter/rerank/llm/total breakdown

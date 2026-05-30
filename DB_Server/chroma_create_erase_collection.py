@@ -14,7 +14,7 @@ IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied.
 """
 
-__author__ = "Gabriel Zapodeanu PTME"
+__author__ = "Gabriel Zapodeanu, Principal TME"
 __email__ = "gzapodea@cisco.com"
 __version__ = "0.1.0"
 __copyright__ = "Copyright (c) 2026 Cisco and/or its affiliates."
@@ -27,8 +27,9 @@ import os
 
 from dotenv import load_dotenv
 
-
-load_dotenv('environment.env')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(BASE_DIR, "environment.env")
+load_dotenv(ENV_PATH)
 
 os.environ['TZ'] = 'America/Los_Angeles'  # define the timezone for PST
 time.tzset()  # adjust the timezone, more info https://help.pythonanywhere.com/pages/SettingTheTimezone/
@@ -41,6 +42,17 @@ DB_PORT = int(os.getenv('DB_PORT'))
 DB_COLLECTION = os.getenv('DB_COLLECTION')
 
 
+def ensure_env_config():
+    required = {
+        "DB_SERVER": DB_SERVER,
+        "DB_PORT": DB_PORT,
+        "DB_COLLECTION": DB_COLLECTION,
+    }
+    for key, value in required.items():
+        if not value:
+            raise ValueError(f"{key} is not set in environment.env")
+
+
 # noinspection PyUnusedLocal
 def main():
     """
@@ -49,17 +61,33 @@ def main():
     User input: Delete (d) or Create (c) collection
     """
 
+    ensure_env_config()
+    print(f"Target Chroma server: {DB_SERVER}:{DB_PORT}")
+    print(f"Target collection: {DB_COLLECTION}")
+
     # configure the Chroma DB server
     chroma_client = chromadb.HttpClient(host=DB_SERVER, port=DB_PORT)
 
     # create or erase the collection
-    user_input = input('Delete (d) or Create (c) collection?  ')
+    user_input = input('Delete (d) or Create (c) collection?  ').strip().lower()
     if user_input == 'd':
-        collection = chroma_client.delete_collection(name=DB_COLLECTION)
-        logging.info(' Collection erased')
+        confirm = input("Type YES to confirm collection deletion: ").strip()
+        if confirm == "YES":
+            try:
+                chroma_client.delete_collection(name=DB_COLLECTION)
+                logging.info(' Collection erased')
+            except Exception as exc:
+                logging.error(" Could not delete collection: %s", exc)
+        else:
+            logging.info(" Deletion cancelled")
     elif user_input == 'c':
-        collection = chroma_client.get_or_create_collection(name=DB_COLLECTION)
-        logging.info(' Collection existing or created')
+        try:
+            chroma_client.get_or_create_collection(name=DB_COLLECTION)
+            logging.info(' Collection existing or created')
+        except Exception as exc:
+            logging.error(" Could not create/get collection: %s", exc)
+    else:
+        logging.info(" No action selected")
 
     # chromadb heartbeat
     chroma_client.heartbeat()

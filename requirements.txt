@@ -3,9 +3,12 @@ urllib3
 catalystcentersdk
 python-dotenv
 PyYAML
+certifi
 
 chromadb
 langchain
+langchain-classic
+langchain-text-splitters
 unstructured
 unstructured[csv]
 sentence-transformers

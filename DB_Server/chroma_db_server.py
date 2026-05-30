@@ -14,7 +14,7 @@ IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied.
 """
 
-__author__ = "Gabriel Zapodeanu PTME"
+__author__ = "Gabriel Zapodeanu, Principal TME"
 __email__ = "gzapodea@cisco.com"
 __version__ = "0.1.0"
 __copyright__ = "Copyright (c) 2026 Cisco and/or its affiliates."
@@ -23,13 +23,13 @@ __license__ = "Cisco Sample Code License, Version 1.1"
 import logging
 import os
 import time
-import requests
+import subprocess
 
 from dotenv import load_dotenv
 
-os.chdir('../')
-
-load_dotenv('environment.env')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(BASE_DIR, "environment.env")
+load_dotenv(ENV_PATH)
 
 os.environ['TZ'] = 'America/Los_Angeles'  # define the timezone for PST
 time.tzset()  # adjust the timezone, more info https://help.pythonanywhere.com/pages/SettingTheTimezone/
@@ -49,7 +49,9 @@ def main():
     """
     if not os.path.exists(DB_PATH):
         os.makedirs(DB_PATH)
-    os.system('chroma run --port ' + DB_PORT + ' --path ' + DB_PATH)
+    command = ['chroma', 'run', '--port', str(DB_PORT), '--path', DB_PATH]
+    logging.info("Running command: %s", " ".join(command))
+    subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

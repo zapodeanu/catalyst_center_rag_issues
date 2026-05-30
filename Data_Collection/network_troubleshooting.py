@@ -19,7 +19,7 @@ or implied.
 
 """
 
-__author__ = "Gabriel Zapodeanu PTME"
+__author__ = "Gabriel Zapodeanu, Principal TME"
 __email__ = "gzapodea@cisco.com"
 __version__ = "0.1.0"
 __copyright__ = "Copyright (c) 2026 Cisco and/or its affiliates."
@@ -38,7 +38,9 @@ from catalystcentersdk import api
 from dotenv import load_dotenv
 from urllib3.exceptions import InsecureRequestWarning  # for insecure https warnings
 
-load_dotenv('../environment.env')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(BASE_DIR, "environment.env")
+load_dotenv(ENV_PATH)
 
 CC_URL = os.getenv('CC_URL')
 CC_USER = os.getenv('CC_USER')
@@ -219,7 +221,8 @@ def main():
 
     # knowledge base pull CLI commands and execution
     logging.info('\n--------------------------------------------------------------------\n')
-    with open('../Data_Collection/troubleshooting_knowledgebase.yml', 'r') as file:
+    knowledgebase_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'troubleshooting_knowledgebase.yml')
+    with open(knowledgebase_path, 'r') as file:
         knowledgebase = yaml.safe_load(file)
 
     # parse the input data
@@ -252,7 +255,10 @@ def main():
 
         # retrieve the commands output from file
         logging.info(' Knowledgebase CLI commands output:')
-        file_content = cc_api.file.download_a_file_by_fileid(file_id=file_id).data
+        if hasattr(cc_api.file, "download_a_file_by_file_id"):
+            file_content = cc_api.file.download_a_file_by_file_id(file_id=file_id).data
+        else:
+            file_content = cc_api.file.download_a_file_by_fileid(file_id=file_id).data
         file_content_data = file_content.decode('ASCII')
         file_content_json = json.loads(file_content_data)
         command_responses_success = file_content_json[0]['commandResponses']['SUCCESS']
