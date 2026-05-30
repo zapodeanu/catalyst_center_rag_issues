@@ -2,6 +2,8 @@
 
 Written by Gabi Zapodeanu, Principal TME, updated with Cursor/Codex 5.3.
 
+This repo hosts files for a RAG GenAI solution for Catalyst Center network issues and troubleshooting.
+
 `Issues Pilot` is a local troubleshooting assistant that:
 - collects Catalyst Center issue/device/compliance/command output data into `DATASET/`
 - chunks and embeds that data into a Chroma collection
